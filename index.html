@@ -1,14 +1,48 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <title>Three.js + Postprocessing + Vite</title>
-  <style>
-    body { margin: 0; overflow: hidden; }
-    canvas { display: block; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Взгляд из-под воды - Three.js</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 100;
+        }
+    </style>
 </head>
 <body>
+    <div id="canvas-container"></div>
+    <div id="info">
+        <div>🌊 Перемещение над и под водой</div>
+        <div>🖱️ ЛКМ + движение мыши - вращение камеры</div>
+        <div>🖱️ ПКМ + движение мыши - панорамирование</div>
+        <div>🖱️ Колесо мыши - приближение/отдаление</div>
+        <div>⬆️ Переместитесь под воду, чтобы увидеть небо через воду</div>
+    </div>
   <script type="module" src="dist/main-out.js"></script>
 </body>
 </html>
