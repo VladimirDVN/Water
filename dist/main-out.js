@@ -26606,6 +26606,175 @@ class PlaneGeometry extends BufferGeometry {
 }
 
 /**
+ * A class for generating a sphere geometry.
+ *
+ * ```js
+ * const geometry = new THREE.SphereGeometry( 15, 32, 16 );
+ * const material = new THREE.MeshBasicMaterial( { color: 0xffff00 } );
+ * const sphere = new THREE.Mesh( geometry, material );
+ * scene.add( sphere );
+ * ```
+ *
+ * @augments BufferGeometry
+ */
+class SphereGeometry extends BufferGeometry {
+
+	/**
+	 * Constructs a new sphere geometry.
+	 *
+	 * @param {number} [radius=1] - The sphere radius.
+	 * @param {number} [widthSegments=32] - The number of horizontal segments. Minimum value is `3`.
+	 * @param {number} [heightSegments=16] - The number of vertical segments. Minimum value is `2`.
+	 * @param {number} [phiStart=0] - The horizontal starting angle in radians.
+	 * @param {number} [phiLength=Math.PI*2] - The horizontal sweep angle size.
+	 * @param {number} [thetaStart=0] - The vertical starting angle in radians.
+	 * @param {number} [thetaLength=Math.PI] - The vertical sweep angle size.
+	 */
+	constructor( radius = 1, widthSegments = 32, heightSegments = 16, phiStart = 0, phiLength = Math.PI * 2, thetaStart = 0, thetaLength = Math.PI ) {
+
+		super();
+
+		this.type = 'SphereGeometry';
+
+		/**
+		 * Holds the constructor parameters that have been
+		 * used to generate the geometry. Any modification
+		 * after instantiation does not change the geometry.
+		 *
+		 * @type {Object}
+		 */
+		this.parameters = {
+			radius: radius,
+			widthSegments: widthSegments,
+			heightSegments: heightSegments,
+			phiStart: phiStart,
+			phiLength: phiLength,
+			thetaStart: thetaStart,
+			thetaLength: thetaLength
+		};
+
+		widthSegments = Math.max( 3, Math.floor( widthSegments ) );
+		heightSegments = Math.max( 2, Math.floor( heightSegments ) );
+
+		const thetaEnd = Math.min( thetaStart + thetaLength, Math.PI );
+
+		let index = 0;
+		const grid = [];
+
+		const vertex = new Vector3();
+		const normal = new Vector3();
+
+		// buffers
+
+		const indices = [];
+		const vertices = [];
+		const normals = [];
+		const uvs = [];
+
+		// generate vertices, normals and uvs
+
+		for ( let iy = 0; iy <= heightSegments; iy ++ ) {
+
+			const verticesRow = [];
+
+			const v = iy / heightSegments;
+
+			// special case for the poles
+
+			let uOffset = 0;
+
+			if ( iy === 0 && thetaStart === 0 ) {
+
+				uOffset = 0.5 / widthSegments;
+
+			} else if ( iy === heightSegments && thetaEnd === Math.PI ) {
+
+				uOffset = -0.5 / widthSegments;
+
+			}
+
+			for ( let ix = 0; ix <= widthSegments; ix ++ ) {
+
+				const u = ix / widthSegments;
+
+				// vertex
+
+				vertex.x = - radius * Math.cos( phiStart + u * phiLength ) * Math.sin( thetaStart + v * thetaLength );
+				vertex.y = radius * Math.cos( thetaStart + v * thetaLength );
+				vertex.z = radius * Math.sin( phiStart + u * phiLength ) * Math.sin( thetaStart + v * thetaLength );
+
+				vertices.push( vertex.x, vertex.y, vertex.z );
+
+				// normal
+
+				normal.copy( vertex ).normalize();
+				normals.push( normal.x, normal.y, normal.z );
+
+				// uv
+
+				uvs.push( u + uOffset, 1 - v );
+
+				verticesRow.push( index ++ );
+
+			}
+
+			grid.push( verticesRow );
+
+		}
+
+		// indices
+
+		for ( let iy = 0; iy < heightSegments; iy ++ ) {
+
+			for ( let ix = 0; ix < widthSegments; ix ++ ) {
+
+				const a = grid[ iy ][ ix + 1 ];
+				const b = grid[ iy ][ ix ];
+				const c = grid[ iy + 1 ][ ix ];
+				const d = grid[ iy + 1 ][ ix + 1 ];
+
+				if ( iy !== 0 || thetaStart > 0 ) indices.push( a, b, d );
+				if ( iy !== heightSegments - 1 || thetaEnd < Math.PI ) indices.push( b, c, d );
+
+			}
+
+		}
+
+		// build geometry
+
+		this.setIndex( indices );
+		this.setAttribute( 'position', new Float32BufferAttribute( vertices, 3 ) );
+		this.setAttribute( 'normal', new Float32BufferAttribute( normals, 3 ) );
+		this.setAttribute( 'uv', new Float32BufferAttribute( uvs, 2 ) );
+
+	}
+
+	copy( source ) {
+
+		super.copy( source );
+
+		this.parameters = Object.assign( {}, source.parameters );
+
+		return this;
+
+	}
+
+	/**
+	 * Factory method for creating an instance of this class from the given
+	 * JSON object.
+	 *
+	 * @param {Object} data - A JSON object representing the serialized geometry.
+	 * @return {SphereGeometry} A new instance.
+	 */
+	static fromJSON( data ) {
+
+		return new SphereGeometry( data.radius, data.widthSegments, data.heightSegments, data.phiStart, data.phiLength, data.thetaStart, data.thetaLength );
+
+	}
+
+}
+
+/**
  * A standard physically based material, using Metallic-Roughness workflow.
  *
  * Physically based rendering (PBR) has recently become the standard in many
@@ -27544,6 +27713,410 @@ class MeshPhysicalMaterial extends MeshStandardMaterial {
 		this.specularIntensityMap = source.specularIntensityMap;
 		this.specularColor.copy( source.specularColor );
 		this.specularColorMap = source.specularColorMap;
+
+		return this;
+
+	}
+
+}
+
+/**
+ * A material for shiny surfaces with specular highlights.
+ *
+ * The material uses a non-physically based [Blinn-Phong]{@link https://en.wikipedia.org/wiki/Blinn-Phong_shading_model}
+ * model for calculating reflectance. Unlike the Lambertian model used in the
+ * {@link MeshLambertMaterial} this can simulate shiny surfaces with specular
+ * highlights (such as varnished wood). `MeshPhongMaterial` uses per-fragment shading.
+ *
+ * Performance will generally be greater when using this material over the
+ * {@link MeshStandardMaterial} or {@link MeshPhysicalMaterial}, at the cost of
+ * some graphical accuracy.
+ *
+ * @augments Material
+ */
+class MeshPhongMaterial extends Material {
+
+	/**
+	 * Constructs a new mesh phong material.
+	 *
+	 * @param {Object} [parameters] - An object with one or more properties
+	 * defining the material's appearance. Any property of the material
+	 * (including any property from inherited materials) can be passed
+	 * in here. Color values can be passed any type of value accepted
+	 * by {@link Color#set}.
+	 */
+	constructor( parameters ) {
+
+		super();
+
+		/**
+		 * This flag can be used for type testing.
+		 *
+		 * @type {boolean}
+		 * @readonly
+		 * @default true
+		 */
+		this.isMeshPhongMaterial = true;
+
+		this.type = 'MeshPhongMaterial';
+
+		/**
+		 * Color of the material.
+		 *
+		 * @type {Color}
+		 * @default (1,1,1)
+		 */
+		this.color = new Color( 0xffffff ); // diffuse
+
+		/**
+		 * Specular color of the material. The default color is set to `0x111111` (very dark grey)
+		 *
+		 * This defines how shiny the material is and the color of its shine.
+		 *
+		 * @type {Color}
+		 */
+		this.specular = new Color( 0x111111 );
+
+		/**
+		 * How shiny the specular highlight is; a higher value gives a sharper highlight.
+		 *
+		 * @type {number}
+		 * @default 30
+		 */
+		this.shininess = 30;
+
+		/**
+		 * The color map. May optionally include an alpha channel, typically combined
+		 * with {@link Material#transparent} or {@link Material#alphaTest}. The texture map
+		 * color is modulated by the diffuse `color`.
+		 *
+		 * @type {?Texture}
+		 * @default null
+		 */
+		this.map = null;
+
+		/**
+		 * The light map. Requires a second set of UVs.
+		 *
+		 * @type {?Texture}
+		 * @default null
+		 */
+		this.lightMap = null;
+
+		/**
+		 * Intensity of the baked light.
+		 *
+		 * @type {number}
+		 * @default 1
+		 */
+		this.lightMapIntensity = 1.0;
+
+		/**
+		 * The red channel of this texture is used as the ambient occlusion map.
+		 * Requires a second set of UVs.
+		 *
+		 * @type {?Texture}
+		 * @default null
+		 */
+		this.aoMap = null;
+
+		/**
+		 * Intensity of the ambient occlusion effect. Range is `[0,1]`, where `0`
+		 * disables ambient occlusion. Where intensity is `1` and the AO map's
+		 * red channel is also `1`, ambient light is fully occluded on a surface.
+		 *
+		 * @type {number}
+		 * @default 1
+		 */
+		this.aoMapIntensity = 1.0;
+
+		/**
+		 * Emissive (light) color of the material, essentially a solid color
+		 * unaffected by other lighting.
+		 *
+		 * @type {Color}
+		 * @default (0,0,0)
+		 */
+		this.emissive = new Color( 0x000000 );
+
+		/**
+		 * Intensity of the emissive light. Modulates the emissive color.
+		 *
+		 * @type {number}
+		 * @default 1
+		 */
+		this.emissiveIntensity = 1.0;
+
+		/**
+		 * Set emissive (glow) map. The emissive map color is modulated by the
+		 * emissive color and the emissive intensity. If you have an emissive map,
+		 * be sure to set the emissive color to something other than black.
+		 *
+		 * @type {?Texture}
+		 * @default null
+		 */
+		this.emissiveMap = null;
+
+		/**
+		 * The texture to create a bump map. The black and white values map to the
+		 * perceived depth in relation to the lights. Bump doesn't actually affect
+		 * the geometry of the object, only the lighting. If a normal map is defined
+		 * this will be ignored.
+		 *
+		 * @type {?Texture}
+		 * @default null
+		 */
+		this.bumpMap = null;
+
+		/**
+		 * How much the bump map affects the material. Typical range is `[0,1]`.
+		 *
+		 * @type {number}
+		 * @default 1
+		 */
+		this.bumpScale = 1;
+
+		/**
+		 * The texture to create a normal map. The RGB values affect the surface
+		 * normal for each pixel fragment and change the way the color is lit. Normal
+		 * maps do not change the actual shape of the surface, only the lighting. In
+		 * case the material has a normal map authored using the left handed
+		 * convention, the `y` component of `normalScale` should be negated to compensate
+		 * for the different handedness.
+		 *
+		 * @type {?Texture}
+		 * @default null
+		 */
+		this.normalMap = null;
+
+		/**
+		 * The type of normal map.
+		 *
+		 * @type {(TangentSpaceNormalMap|ObjectSpaceNormalMap)}
+		 * @default TangentSpaceNormalMap
+		 */
+		this.normalMapType = TangentSpaceNormalMap;
+
+		/**
+		 * How much the normal map affects the material. Typical value range is `[0,1]`.
+		 *
+		 * @type {Vector2}
+		 * @default (1,1)
+		 */
+		this.normalScale = new Vector2( 1, 1 );
+
+		/**
+		 * The displacement map affects the position of the mesh's vertices. Unlike
+		 * other maps which only affect the light and shade of the material the
+		 * displaced vertices can cast shadows, block other objects, and otherwise
+		 * act as real geometry. The displacement texture is an image where the value
+		 * of each pixel (white being the highest) is mapped against, and
+		 * repositions, the vertices of the mesh.
+		 *
+		 * @type {?Texture}
+		 * @default null
+		 */
+		this.displacementMap = null;
+
+		/**
+		 * How much the displacement map affects the mesh (where black is no
+		 * displacement, and white is maximum displacement). Without a displacement
+		 * map set, this value is not applied.
+		 *
+		 * @type {number}
+		 * @default 0
+		 */
+		this.displacementScale = 1;
+
+		/**
+		 * The offset of the displacement map's values on the mesh's vertices.
+		 * The bias is added to the scaled sample of the displacement map.
+		 * Without a displacement map set, this value is not applied.
+		 *
+		 * @type {number}
+		 * @default 0
+		 */
+		this.displacementBias = 0;
+
+		/**
+		 * The specular map value affects both how much the specular surface
+		 * highlight contributes and how much of the environment map affects the
+		 * surface.
+		 *
+		 * @type {?Texture}
+		 * @default null
+		 */
+		this.specularMap = null;
+
+		/**
+		 * The alpha map is a grayscale texture that controls the opacity across the
+		 * surface (black: fully transparent; white: fully opaque).
+		 *
+		 * Only the color of the texture is used, ignoring the alpha channel if one
+		 * exists. For RGB and RGBA textures, the renderer will use the green channel
+		 * when sampling this texture due to the extra bit of precision provided for
+		 * green in DXT-compressed and uncompressed RGB 565 formats. Luminance-only and
+		 * luminance/alpha textures will also still work as expected.
+		 *
+		 * @type {?Texture}
+		 * @default null
+		 */
+		this.alphaMap = null;
+
+		/**
+		 * The environment map.
+		 *
+		 * @type {?Texture}
+		 * @default null
+		 */
+		this.envMap = null;
+
+		/**
+		 * The rotation of the environment map in radians.
+		 *
+		 * @type {Euler}
+		 * @default (0,0,0)
+		 */
+		this.envMapRotation = new Euler();
+
+		/**
+		 * How to combine the result of the surface's color with the environment map, if any.
+		 *
+		 * When set to `MixOperation`, the {@link MeshBasicMaterial#reflectivity} is used to
+		 * blend between the two colors.
+		 *
+		 * @type {(MultiplyOperation|MixOperation|AddOperation)}
+		 * @default MultiplyOperation
+		 */
+		this.combine = MultiplyOperation;
+
+		/**
+		 * How much the environment map affects the surface.
+		 * The valid range is between `0` (no reflections) and `1` (full reflections).
+		 *
+		 * @type {number}
+		 * @default 1
+		 */
+		this.reflectivity = 1;
+
+		/**
+		 * The index of refraction (IOR) of air (approximately 1) divided by the
+		 * index of refraction of the material. It is used with environment mapping
+		 * modes {@link CubeRefractionMapping} and {@link EquirectangularRefractionMapping}.
+		 * The refraction ratio should not exceed `1`.
+		 *
+		 * @type {number}
+		 * @default 0.98
+		 */
+		this.refractionRatio = 0.98;
+
+		/**
+		 * Renders the geometry as a wireframe.
+		 *
+		 * @type {boolean}
+		 * @default false
+		 */
+		this.wireframe = false;
+
+		/**
+		 * Controls the thickness of the wireframe.
+		 *
+		 * Can only be used with {@link SVGRenderer}.
+		 *
+		 * @type {number}
+		 * @default 1
+		 */
+		this.wireframeLinewidth = 1;
+
+		/**
+		 * Defines appearance of wireframe ends.
+		 *
+		 * Can only be used with {@link SVGRenderer}.
+		 *
+		 * @type {('round'|'bevel'|'miter')}
+		 * @default 'round'
+		 */
+		this.wireframeLinecap = 'round';
+
+		/**
+		 * Defines appearance of wireframe joints.
+		 *
+		 * Can only be used with {@link SVGRenderer}.
+		 *
+		 * @type {('round'|'bevel'|'miter')}
+		 * @default 'round'
+		 */
+		this.wireframeLinejoin = 'round';
+
+		/**
+		 * Whether the material is rendered with flat shading or not.
+		 *
+		 * @type {boolean}
+		 * @default false
+		 */
+		this.flatShading = false;
+
+		/**
+		 * Whether the material is affected by fog or not.
+		 *
+		 * @type {boolean}
+		 * @default true
+		 */
+		this.fog = true;
+
+		this.setValues( parameters );
+
+	}
+
+	copy( source ) {
+
+		super.copy( source );
+
+		this.color.copy( source.color );
+		this.specular.copy( source.specular );
+		this.shininess = source.shininess;
+
+		this.map = source.map;
+
+		this.lightMap = source.lightMap;
+		this.lightMapIntensity = source.lightMapIntensity;
+
+		this.aoMap = source.aoMap;
+		this.aoMapIntensity = source.aoMapIntensity;
+
+		this.emissive.copy( source.emissive );
+		this.emissiveMap = source.emissiveMap;
+		this.emissiveIntensity = source.emissiveIntensity;
+
+		this.bumpMap = source.bumpMap;
+		this.bumpScale = source.bumpScale;
+
+		this.normalMap = source.normalMap;
+		this.normalMapType = source.normalMapType;
+		this.normalScale.copy( source.normalScale );
+
+		this.displacementMap = source.displacementMap;
+		this.displacementScale = source.displacementScale;
+		this.displacementBias = source.displacementBias;
+
+		this.specularMap = source.specularMap;
+
+		this.alphaMap = source.alphaMap;
+
+		this.envMap = source.envMap;
+		this.envMapRotation.copy( source.envMapRotation );
+		this.combine = source.combine;
+		this.reflectivity = source.reflectivity;
+		this.refractionRatio = source.refractionRatio;
+
+		this.wireframe = source.wireframe;
+		this.wireframeLinewidth = source.wireframeLinewidth;
+		this.wireframeLinecap = source.wireframeLinecap;
+		this.wireframeLinejoin = source.wireframeLinejoin;
+
+		this.flatShading = source.flatShading;
+
+		this.fog = source.fog;
 
 		return this;
 
@@ -61848,20 +62421,20 @@ Sky.SkyShader = {
 };
 
 let animations, mixer, animations1, mixer1, animations3, mixer3, animations4, mixer4,mixer6, animations6 ;
-//let containers = [];
-//let fish,fish1,fish3,fish4,fish5,fish6,fish7,fish8,fish9;
-//let fishContainer1,fishContainer,fishContainer4;        
+let wakeParticles = [];
 
         // Сцена
-        const scene = new Scene();
-        const camera = new PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
-        const renderer = new WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = PCFSoftShadowMap;
-        renderer.sortObjects = true; // Важно для правильной сортировки прозрачных объектов
-        document.getElementById('canvas-container').appendChild(renderer.domElement);
+let scene = new Scene();
+const camera = new PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+const renderer = new WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = PCFSoftShadowMap;
+renderer.sortObjects = true; // Важно для правильной сортировки прозрачных объектов
+renderer.toneMapping = ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.5;
+document.getElementById('canvas-container').appendChild(renderer.domElement);
 
         // Освещение
         const ambientLight = new AmbientLight(0xffffff, 0.4);
@@ -61879,6 +62452,7 @@ let animations, mixer, animations1, mixer1, animations3, mixer3, animations4, mi
 let gltf = await gltfLoader.loadAsync('png/ship1.glb'); 
 let ship1 = gltf.scene;
 ship1.scale.set( 8,8, 8 );
+ship1.rotation.y = -Math.PI / 2;
 ship1.position.y = 7;
 ship1.position.z = 35;
 ship1.position.x = 40;
@@ -61887,12 +62461,13 @@ scene.add(ship1);
 gltf = await gltfLoader.loadAsync('png/ship2.glb'); 
 let ship2 = gltf.scene;
 ship2.scale.set( 8,8, 8 );
+ship2.rotation.y = -Math.PI / 2;
 ship2.position.y = 7;
 ship2.position.z = -15;
 ship2.position.x = -40;
 scene.add(ship2);
 
-gltf = await gltfLoader.loadAsync('png/ship3.glb'); 
+gltf = await gltfLoader.loadAsync('png/ship5.glb'); 
 let ship4 = gltf.scene;
 ship4.scale.set( 8,8, 8 );
 ship4.position.y = 0.6;
@@ -61906,6 +62481,9 @@ if (animations6 && animations6.length) {
     mixer6.clipAction(clip).play();
     });
 } 
+const bbox = new Box3().setFromObject(ship4);
+const size = new Vector3();
+bbox.getSize(size);
 
 gltf = await gltfLoader.loadAsync('png/fish2.glb'); 
 let fish1 = gltf.scene;
@@ -62034,15 +62612,16 @@ scene.add(fish3);
       
 		
 		// Небо
-        const sky = new Sky();
-        sky.scale.setScalar(10000);
-        const skyUniforms = sky.material.uniforms;
-        skyUniforms['turbidity'].value = 10;
-        skyUniforms['rayleigh'].value = 2;
-        skyUniforms['mieCoefficient'].value = 0.005;
-        skyUniforms['mieDirectionalG'].value = 0.8;
-        skyUniforms['sunPosition'].value = new Vector3(0, 100, 0);
-        scene.add(sky);
+            let sky = new Sky();
+            sky.scale.setScalar(10000);
+            scene.add(sky);
+            let sun = new Vector3();
+            const skyUniforms = sky.material.uniforms;
+            skyUniforms['sunPosition'].value = sun;
+            skyUniforms['turbidity'].value = 10;
+            skyUniforms['rayleigh'].value = 3;
+            skyUniforms['mieCoefficient'].value = 0.005;
+            skyUniforms['mieDirectionalG'].value = 0.7;
 
         // Создание реалистичных облаков с текстурами
         const clouds = new Group();
@@ -62193,6 +62772,7 @@ scene.add(fish3);
         water.position.y = 0; // Поверхность воды на уровне 0
         scene.add(water);
 
+createWakeParticles();
 
         // Подводная часть - дно океана
         const oceanFloorGeometry = new PlaneGeometry(2000, 2000, 32, 32);
@@ -62385,7 +62965,160 @@ scene.add(fish3);
             }
         }
 
+// Bubbles
+  const bubbles = [];
+  for (let i = 0; i < 30; i++) {
+    const bubbleGeometry = new SphereGeometry(Math.random() * 0.1 + 0.05, 16, 16);
+    const bubbleMaterial = new MeshPhongMaterial({
+      color: 0x99ccff,
+      transparent: true,
+      opacity: 0.5,
+      shininess: 100
+    });
+    const bubble = new Mesh(bubbleGeometry, bubbleMaterial);
+    bubble.position.set(
+      (Math.random() - 0.5) * 100,
+      Math.random() * 3 - 20,
+      (Math.random() - 0.5) * 100
+    );
+    scene.add(bubble);
+    bubbles.push(bubble);
+  }
 
+        function createWakeParticles() {
+            const particleGeometry = new BufferGeometry();
+            const particleCount = 300;
+            const positions = new Float32Array(particleCount * 3);
+            const velocities = new Float32Array(particleCount * 3);
+            const ages = new Float32Array(particleCount);
+            
+            for (let i = 0; i < particleCount; i++) {
+                positions[i * 3] = 40;
+                positions[i * 3 + 1] = 0;
+                positions[i * 3 + 2] = 0;
+                velocities[i * 3] = (Math.random() - 0.5) * 0.3;
+                velocities[i * 3 + 1] = Math.random() * 0.2 + 0.1;
+                velocities[i * 3 + 2] = -Math.random() * 0.5 - 0.2;
+                ages[i] = Math.random();
+            }
+            
+            particleGeometry.setAttribute('position', new BufferAttribute(positions, 3));
+            particleGeometry.setAttribute('velocity', new BufferAttribute(velocities, 3));
+            particleGeometry.setAttribute('age', new BufferAttribute(ages, 1));
+            
+            const particleMaterial = new PointsMaterial({
+                color: 0xFFFFFF,
+                size: 0.15,
+                transparent: true,
+                opacity: 0.8,
+                blending: AdditiveBlending
+            });
+            
+            const particles = new Points(particleGeometry, particleMaterial);
+            scene.add(particles);
+            wakeParticles.push(particles);
+        }
+
+        function updateWakeParticles() {
+            wakeParticles.forEach(particles => {
+                const positions = particles.geometry.attributes.position.array;
+                const velocities = particles.geometry.attributes.velocity.array;
+                const ages = particles.geometry.attributes.age.array;
+                
+                for (let i = 0; i < positions.length; i += 3) {
+                    ages[i / 3] += 0.02;
+                    
+                    if (ages[i / 3] > 1.5) {
+                        // Перезапуск частицы из пропеллера
+                        positions[i] = ship4.position.x + size.x*0.4;
+                        positions[i + 1] = 0.1;
+                        positions[i + 2] = ship4.position.z - 4 + size.z*0.55;
+                        ages[i / 3] = 0;
+                        
+                        velocities[i] = (Math.random() - 0.5) * 0.4;
+                        velocities[i + 1] = Math.random() * 0.3 + 0.15;
+                        velocities[i + 2] = -Math.random() * 0.6 - 0.3;
+                    } else {
+                        // Обновление позиции
+                        positions[i] += velocities[i];
+                        positions[i + 1] += velocities[i + 1] * 0.5;
+                        positions[i + 2] += velocities[i + 2];
+                        
+                        // Затухание
+                        velocities[i + 1] *= 0.98;
+                        velocities[i + 2] *= 0.99;
+                    }
+                }
+                
+                particles.geometry.attributes.position.needsUpdate = true;
+                particles.geometry.attributes.age.needsUpdate = true;
+                particles.geometry.attributes.velocity.needsUpdate = true;
+            });
+        }
+
+const wakes = [];
+new TextureLoader();
+    // Положите рядом файл wake.png или замените этот load на null
+const wakeTexture = new TextureLoader().load('png/waternormals.jpg', function (texture) {
+                    texture.wrapS = texture.wrapT = RepeatWrapping;
+});
+function createWakeSegment() {
+      const geo = new PlaneGeometry(size.x*0.2, size.z*0.3);
+      let mat;
+      if (wakeTexture && wakeTexture.image) {
+        mat = new MeshBasicMaterial({
+          map: wakeTexture,
+		  color: 0x75897A,
+          transparent: true,
+          opacity: 0.9,
+          depthWrite: false,
+		  side: DoubleSide
+        });
+      } else {
+        // Запасной вариант без текстуры: просто полупрозрачный белый прямоугольник
+        mat = new MeshBasicMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.4,
+          depthWrite: false
+        });
+      }
+      const wake = new Mesh(geo, mat);
+      wake.rotation.x = -Math.PI / 2;
+      // Позиция чуть позади лодки
+      const dir = new Vector3(-1, 0, 0);
+	  const dir2 = new Vector3(1, 0, 0);	
+      wake.position.copy(ship4.position).addScaledVector(dir2, size.x*0.4).addScaledVector(dir, size.x*0.3);
+//	  wake.position.copy(ship4.position.z).addScaledVector(dir, -size.z*0.55);
+      // Небольшой случайный разброс по сторонам, чтобы след был живее
+      const side = new Vector3(1, 0, 0).applyQuaternion(ship4.quaternion);
+      const offset = (Math.random() - 0.5) * 2; // [-1; 1]
+      wake.position.addScaledVector(side, offset);
+      wake.userData.life = 1.0; // от 1 до 0
+      scene.add(wake);
+      wakes.push(wake);
+}
+
+function updateWakes(delta) {
+      for (let i = wakes.length - 1; i >= 0; i--) {
+        const w = wakes[i];
+        // "Жизнь" уменьшается
+        w.userData.life -= delta * 0.9; // скорость затухания
+        if (w.userData.life <= 0) {
+          scene.remove(w);
+          wakes.splice(i, 1);
+          continue;
+        }
+        const life = w.userData.life;
+        w.material.opacity = life * 0.9;
+        // Лёгкое расширение и растяжение по мере исчезновения
+        const scale = 1 + (1 - life) * 0.6;
+        w.scale.set(scale * 1.4, scale * 1.4, 1);
+        // Немного «размазываем» назад
+        const dir = new Vector3(-1, 0, 0);
+        w.position.addScaledVector(dir, -delta * 1.5);
+      }
+    }
 
 // Лиссажу
 let freq = { x: 0.2, y: 0.13, z: 0.17 };
@@ -62415,8 +63148,9 @@ let t = 0;
 	
 //	fishes();
         // Анимация
+let wakeTimer = 0;
  function animate(time) {
-            requestAnimationFrame(animate);
+      requestAnimationFrame(animate);
 	  if (camera.position.y <= 0) {	
 		updateUnderwaterEffect();
 	  }
@@ -62453,21 +63187,32 @@ let t = 0;
 	ship4.position.x -= 0.01;
 	if(ship1.position.x < -40) ship1.position.x = 40;
 	if(ship2.position.x > 50) ship2.position.x = -50;
-	if(ship4.position.x < -50) ship4.position.x = 50;
+	if(ship4.position.x < -100) ship4.position.x = 50;
     if (mixer) mixer.update(delta);
     if (mixer1) mixer1.update(delta);	  	
     if (mixer3) mixer3.update(delta);	  
     if (mixer4) mixer4.update(delta);	 
     if (mixer6) mixer6.update(delta);	
 	
-    if (camera.position.y < -5) {
+    if (camera.position.y < -1) {
                 // Подводный эффект - темный цвет воды
         renderer.setClearColor(0x000510, 1);
         scene.fog = new FogExp2(0x000510, 0.02);
                 // Скрываем небо и облака в подводном мире
         sky.visible = false;
         clouds.visible = false;
-    } else {
+      // Animate bubbles
+		for (let bubble of bubbles) {
+		  bubble.position.y += 0.01 + Math.random() * 0.01;
+		  if (bubble.position.y > -1) {
+			   bubble.position.set(
+			  (Math.random() - 0.5) * 100,
+			  Math.random() * 3 - 20,
+			  (Math.random() - 0.5) * 100
+			);
+		  }
+		}	
+    } else {				
             renderer.setClearColor(0x87ceeb, 1);
             scene.fog = null;
                 // Показываем небо и облака над водой
@@ -62478,7 +63223,13 @@ let t = 0;
     const deltaTime = delta * 60; // нормализованный множитель для движения
     time += delta;            
             // Обновление воды
-    water.material.uniforms['time'].value += delta;        
+//    water.material.uniforms['time'].value += delta;    
+	if (water.material.uniforms['time']) {
+        water.material.uniforms['time'].value += 1.0 / 60.0;
+    }  
+		
+	updateWakeParticles();
+	
             // Анимация облаков
     animateClouds(deltaTime);            
             // Автоматический переход
@@ -62494,16 +63245,31 @@ let t = 0;
     }
             // Обновление подводного эффекта
     updateUnderwaterEffect();
-            // Обновление контролов
-    controls.update();        
+	// Обновление следа
+	clock.getDelta();
+	wakeTimer += delta;
+    if (wakeTimer > 0.05) {
+        createWakeSegment();
+        wakeTimer = 0;
+    }
+    updateWakes(delta);
             // Обновление позиции солнца для неба
-    const sun = new Vector3();
-    const theta = Math.PI * (0.5 - 0.5);
+//    const sun = new THREE.Vector3();
+/*     const theta = Math.PI * (0.5 - 0.5);
     const phi = 2 * Math.PI * (0.5 - 0.5);
     sun.x = Math.cos(phi);
     sun.y = Math.sin(phi) * Math.sin(theta);
     sun.z = Math.sin(phi) * Math.cos(theta);
-    skyUniforms['sunPosition'].value.copy(sun);        
+    skyUniforms['sunPosition'].value.copy(sun);  */
+	            const tim = clock.getElapsedTime();
+            sun.set(
+                Math.cos(tim * 0.1) * 100,
+                Math.sin(tim * 0.1) * 100 + 50,
+                Math.sin(tim * 0.05) * 100
+            );
+            water.material.uniforms['sunDirection'].value.copy(sun).normalize();
+	            // Обновление контролов
+    controls.update();        
     renderer.render(scene, camera);
  }
 
